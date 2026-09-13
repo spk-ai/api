@@ -112,6 +112,16 @@ message InlineFileMount {
   string path = 1;
 }
 
+// Kubernetes-style CPU/memory requests and limits. All four values must be
+// positive quantities, with each request no greater than its corresponding
+// limit. The runner must reject values it cannot enforce.
+message ComputeResources {
+  string requests_cpu = 1;
+  string requests_memory = 2;
+  string limits_cpu = 3;
+  string limits_memory = 4;
+}
+
 // ContainerSpec describes a single container within a workload.
 message ContainerSpec {
   string image = 1;
@@ -132,6 +142,14 @@ message ContainerSpec {
 
   // Inline files mounted read-only into this container.
   repeated InlineFileMount inline_file_mounts = 9;
+
+  // Requires "compute-resources" in StartWorkloadRequest.capabilities so a
+  // runner without this contract rejects the request instead of ignoring it.
+  // That capability requires explicit main-container resources. Supporting
+  // containers may omit this field only when the runner supplies complete
+  // operator-configured defaults, including for runner-injected containers.
+  // These are per-container allocations, not a shared whole-workload budget.
+  ComputeResources resources = 10;
 
   // Backend-specific optional properties.
   map<string, string> additional_properties = 100;
