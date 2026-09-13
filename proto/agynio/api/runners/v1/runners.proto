@@ -392,7 +392,14 @@ message Workload {
   optional string instance_id = 9;
   google.protobuf.Timestamp last_activity_at = 10;
   optional google.protobuf.Timestamp last_metering_sampled_at = 11;
+  // End of the metered lifetime. A terminal status can set this before the
+  // runner has removed the workload; it is not physical-removal evidence.
   optional google.protobuf.Timestamp removed_at = 12;
+  // Set explicitly by lifecycle reconciliation after the runner confirms
+  // absence. Never inferred from terminal status, removed_at, or a stop ACK.
+  // Absence means unverified, including records created before this field.
+  // This does not establish fencing against failed nodes or late creates.
+  optional google.protobuf.Timestamp removal_confirmed_at = 28;
   int32 allocated_cpu_millicores = 13;
   int64 allocated_ram_bytes = 14;
   // Flavor the workload started on. Empty when it started without an environment.
@@ -460,6 +467,9 @@ message UpdateWorkloadRequest {
   optional WorkloadFailureReason failure_reason = 7;
   // Human-readable failure detail; not intended for programmatic parsing.
   optional string failure_message = 8;
+  // Confirm physical removal of a stopped/failed workload after runner
+  // inspection. The first confirmation is retained; retries cannot move it.
+  optional google.protobuf.Timestamp removal_confirmed_at = 9;
 }
 
 message UpdateWorkloadResponse {
