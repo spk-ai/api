@@ -2,6 +2,9 @@
 
 Agyn API contracts (IDL) repository.
 
+The checked-volume lifecycle on this branch is a coordinated contract proposal,
+not a released capability. See [CHECKED-VOLUMES.md](CHECKED-VOLUMES.md).
+
 ## Protobuf layout
 Protobuf sources live under:
 

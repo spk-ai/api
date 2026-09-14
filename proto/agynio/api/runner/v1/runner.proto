@@ -29,6 +29,11 @@ service RunnerService {
 
   rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse);
 
+  // Never fall back to RemoveVolume on Unimplemented. The expected instance
+  // must come from a durable control-plane removal intent, not a fresh lookup
+  // by name after a failed attempt.
+  rpc RemoveVolumeChecked(RemoveVolumeCheckedRequest) returns (RemoveVolumeCheckedResponse);
+
   rpc TouchWorkload(TouchWorkloadRequest) returns (TouchWorkloadResponse);
 
   rpc PutArchive(PutArchiveRequest) returns (PutArchiveResponse);
@@ -342,6 +347,11 @@ message ListVolumesRequest {}
 message VolumeListItem {
   string instance_id = 1;
   string volume_key = 2;
+  // Opaque backend incarnation, distinct from the reusable instance_id/name.
+  // Empty on an older runner; such inventory cannot authorize checked removal.
+  string instance_uid = 3;
+  // Persistent ownership labels only, not workload/turn labels or credentials.
+  map<string, string> identity_labels = 4;
 }
 
 message ListVolumesResponse {
@@ -354,6 +364,27 @@ message RemoveVolumeRequest {
 }
 
 message RemoveVolumeResponse {}
+
+message RemoveVolumeCheckedRequest {
+  // Pin name, volume key, backend UID and persistent ownership. The backend
+  // must verify them before using an atomic delete precondition. A mismatch
+  // must not be treated as absence, adopted, or retried against a new target.
+  VolumeListItem expected = 1;
+}
+
+enum VolumeRemovalState {
+  VOLUME_REMOVAL_STATE_UNSPECIFIED = 0;
+  // Removal was requested or the instance is already terminating, but still
+  // exists. An acknowledgement alone does not release the durable record.
+  VOLUME_REMOVAL_STATE_PENDING = 1;
+  // The expected instance is absent and no replacement occupies its name.
+  // This is not fencing against a future late create or a partitioned node.
+  VOLUME_REMOVAL_STATE_ABSENT = 2;
+}
+
+message RemoveVolumeCheckedResponse {
+  VolumeRemovalState state = 1;
+}
 
 message TouchWorkloadRequest {
   string workload_id = 1;
