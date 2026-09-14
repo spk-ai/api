@@ -33,6 +33,9 @@ service RunnerService {
   // must come from a durable control-plane removal intent, not a fresh lookup
   // by name after a failed attempt.
   rpc RemoveVolumeChecked(RemoveVolumeCheckedRequest) returns (RemoveVolumeCheckedResponse);
+  // Backend-bound deletion is a separate capability. Older runners must return
+  // Unimplemented, never silently ignore an added deletion precondition.
+  rpc RemoveVolumeBound(RemoveVolumeBoundRequest) returns (RemoveVolumeBoundResponse);
 
   rpc TouchWorkload(TouchWorkloadRequest) returns (TouchWorkloadResponse);
 
@@ -411,6 +414,15 @@ enum VolumeRemovalState {
 }
 
 message RemoveVolumeCheckedResponse {
+  VolumeRemovalState state = 1;
+}
+
+message RemoveVolumeBoundRequest {
+  // Complete immutable physical identity, including the required backend_id.
+  VolumeListItem expected = 1;
+}
+
+message RemoveVolumeBoundResponse {
   VolumeRemovalState state = 1;
   // Identity actually observed by the backend for this operation, not an echo
   // of unverified input. The caller must match it against the stored intent
