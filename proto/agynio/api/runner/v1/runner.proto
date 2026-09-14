@@ -17,6 +17,9 @@ service RunnerService {
   // before activating; a lost reply is not permission to prepare/execute again.
   rpc PrepareWorkload(PrepareWorkloadRequest) returns (PrepareWorkloadResponse);
   rpc ActivateWorkload(ActivateWorkloadRequest) returns (ActivateWorkloadResponse);
+  // Read-only health inspection of an already recorded incarnation. Never
+  // substitute name-only inspection or activation as a liveness probe.
+  rpc InspectPreparedWorkload(InspectPreparedWorkloadRequest) returns (InspectPreparedWorkloadResponse);
   rpc RemovePreparedWorkload(RemovePreparedWorkloadRequest) returns (RemovePreparedWorkloadResponse);
   rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
   rpc RemoveWorkload(RemoveWorkloadRequest) returns (RemoveWorkloadResponse);
@@ -257,6 +260,19 @@ message ActivateWorkloadRequest {
 
 message ActivateWorkloadResponse {
   WorkloadBinding binding = 1;
+}
+
+message InspectPreparedWorkloadRequest {
+  WorkloadBinding expected = 1;
+}
+
+message InspectPreparedWorkloadResponse {
+  WorkloadBinding binding = 1;
+  InspectWorkloadResponse workload = 2;
+  // The native activation gate has been removed. This does not mean ready.
+  bool activated = 3;
+  bool removal_pending = 4;
+  string resource_version = 5;
 }
 
 message RemovePreparedWorkloadRequest {
