@@ -45,6 +45,9 @@ service RunnersService {
 
   // --- Workload state ---
   rpc CreateWorkload(CreateWorkloadRequest) returns (CreateWorkloadResponse);
+  // Explicit opt-in; an old registry must fail closed with Unimplemented.
+  rpc CreatePreparedWorkload(CreatePreparedWorkloadRequest) returns (CreatePreparedWorkloadResponse);
+  rpc UpdatePreparedWorkload(UpdatePreparedWorkloadRequest) returns (UpdatePreparedWorkloadResponse);
   rpc UpdateWorkload(UpdateWorkloadRequest) returns (UpdateWorkloadResponse);
   rpc UpdateWorkloadStatus(UpdateWorkloadStatusRequest) returns (UpdateWorkloadStatusResponse);
   rpc ReportWorkloadState(ReportWorkloadStateRequest) returns (ReportWorkloadStateResponse);
@@ -431,6 +434,87 @@ message Workload {
   optional string agent_class_name = 24;
   // Present when owner_kind is RUNTIME_OWNER_KIND_AGENT_INSTANCE; absent otherwise.
   optional string agent_instance_id = 25;
+  // Absent on legacy records. Status and billing end are not preparation or
+  // physical-removal evidence. Only the distinct prepared RPCs change this.
+  PreparedWorkloadLifecycle preparation = 29;
+}
+
+enum PreparedWorkloadPhase {
+  PREPARED_WORKLOAD_PHASE_UNSPECIFIED = 0;
+  PREPARED_WORKLOAD_PHASE_RESERVED = 1;
+  PREPARED_WORKLOAD_PHASE_PREPARING = 2;
+  PREPARED_WORKLOAD_PHASE_BOUND = 3;
+  PREPARED_WORKLOAD_PHASE_ACTIVATING = 4;
+  PREPARED_WORKLOAD_PHASE_ACTIVE = 5;
+  PREPARED_WORKLOAD_PHASE_REMOVING = 6;
+  PREPARED_WORKLOAD_PHASE_REMOVED = 7;
+}
+
+message PreparedWorkloadLifecycle {
+  PreparedWorkloadPhase phase = 1;
+  uint64 revision = 2;
+  string backend_id = 3;
+  // Registry volume record IDs, not definition IDs. Immutable, complete mount set.
+  repeated string volume_ids = 4;
+  agynio.api.runner.v1.WorkloadBinding binding = 5;
+  agynio.api.runner.v1.RemovePreparedWorkloadResponse removal_observation = 6;
+}
+
+message CreatePreparedWorkloadRequest {
+  // Must start in STARTING. Creates a reservation, not permission to prepare.
+  CreateWorkloadRequest workload = 1;
+  string backend_id = 2;
+  repeated string volume_ids = 3;
+}
+
+message CreatePreparedWorkloadResponse {
+  Workload workload = 1;
+}
+
+message BeginWorkloadPreparation {}
+
+message BindPreparedWorkload {
+  // Bind each checked volume first. The registry verifies the complete set.
+  // A delayed reply may bind a REMOVING record for cleanup, never activation.
+  agynio.api.runner.v1.WorkloadBinding binding = 1;
+}
+
+message BeginWorkloadActivation {}
+
+message ConfirmWorkloadActivation {
+  agynio.api.runner.v1.WorkloadBinding binding = 1;
+}
+
+message BeginPreparedWorkloadRemoval {}
+
+message ConfirmPreparedWorkloadRemoval {
+  // Only exact-binding ABSENT is accepted. This is not an authenticated receipt
+  // or evidence of node/storage fencing; the caller must authenticate its route.
+  agynio.api.runner.v1.RemovePreparedWorkloadResponse observation = 1;
+}
+
+message AbortWorkloadReservation {}
+
+message UpdatePreparedWorkloadRequest {
+  string id = 1;
+  uint64 expected_revision = 2;
+  // Each successful operation advances revision. On a lost reply, read state;
+  // do not replay PrepareWorkload or an agent message. Once PREPARING, an
+  // unknown outcome retains admission until exact-identity reconciliation.
+  oneof operation {
+    BeginWorkloadPreparation begin_preparation = 3;
+    BindPreparedWorkload bind = 4;
+    BeginWorkloadActivation begin_activation = 5;
+    ConfirmWorkloadActivation confirm_activation = 6;
+    BeginPreparedWorkloadRemoval begin_removal = 7;
+    ConfirmPreparedWorkloadRemoval confirm_removal = 8;
+    // Only RESERVED, where no native preparation was authorized, may abort.
+    AbortWorkloadReservation abort_reservation = 9;
+  }
+}
+
+message UpdatePreparedWorkloadResponse {
+  Workload workload = 1;
 }
 
 message CreateWorkloadRequest {

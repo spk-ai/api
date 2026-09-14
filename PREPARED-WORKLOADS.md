@@ -1,8 +1,8 @@
 # Prepared Workload Contract
 
 Dependent proposal on the combined backend-identity API (`ad5405b`). This is not
-a published capability or a drop-in platform upgrade. The registry and
-orchestrator do not yet persist/call this contract.
+a published capability or a drop-in platform upgrade. The dependent registry
+contract below adds persistence commands; controller migration is still required.
 
 ## Lifecycle
 
@@ -47,7 +47,7 @@ collection is asynchronous, separate from the native workload absence receipt.
 
 ## Remaining Work
 
-- Add immutable workload-binding storage, admission/CAS and old-writer guards.
+- Integrate the dependent registry contract and its matching database guards.
 - Migrate both agent and sandbox controllers, including lost prepare/activate
   replies, cancellation, stale caller leases and recovery after process death.
 - Audit authenticated routes and all native writers; protect gates, holds and
@@ -59,6 +59,29 @@ collection is asynchronous, separate from the native workload absence receipt.
   storage fencing remain separate requirements.
 - Coordinate rollout and full A2A/model lifecycle acceptance. Native model-free
   acceptance does not establish these control-plane or security guarantees.
+
+## Registry Contract
+
+`CreatePreparedWorkload` reserves a STARTING workload with immutable backend and
+registry volume IDs. It does not authorize native preparation. Only a successful
+revision-checked `UpdatePreparedWorkload(begin_preparation)` permits that call.
+Bind the checked volumes, persist the exact returned workload binding, then CAS
+`begin_activation` before invoking native activation. Native status and billing
+fields cannot replace these transitions.
+
+The lifecycle is RESERVED -> PREPARING -> BOUND -> ACTIVATING -> ACTIVE, then
+REMOVING -> REMOVED. Any post-reservation nonterminal phase may begin removal.
+A RESERVED record may instead abort because preparation has not been authorized.
+PREPARING cannot be aborted on a generic error: a delayed/lost native response
+may hide a gated Pod. A late binding can be attached while REMOVING only for
+cleanup, never to restore activation authorization. Removal requires the exact
+binding and native ABSENT observation, both retained with the confirmation.
+
+Read the exact record after a lost CAS reply; do not repeat native preparation
+or replay agent messages. Caller authentication, native route enforcement,
+late-operation reconciliation and node/storage fencing remain separate gates.
+Cancellation after ACTIVATING cannot retract an already in-flight native call.
+These registry methods are distinct capabilities with no legacy fallback.
 
 ## References
 
