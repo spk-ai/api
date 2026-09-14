@@ -62,6 +62,10 @@ service RunnersService {
   // --- Volume state ---
   rpc CreateVolume(CreateVolumeRequest) returns (CreateVolumeResponse);
   rpc UpdateVolume(UpdateVolumeRequest) returns (UpdateVolumeResponse);
+  // Distinct RPCs make older servers fail closed rather than ignore newly
+  // added precondition fields. Checked callers must not use legacy fallback.
+  rpc CreateVolumeChecked(CreateVolumeCheckedRequest) returns (CreateVolumeCheckedResponse);
+  rpc UpdateVolumeChecked(UpdateVolumeCheckedRequest) returns (UpdateVolumeCheckedResponse);
   rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse);
   rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
   rpc ListVolumesByThread(ListVolumesByThreadRequest) returns (ListVolumesByThreadResponse);
@@ -646,6 +650,16 @@ message Volume {
   optional string volume_definition_name = 19;
   // Present when owner_kind is RUNTIME_OWNER_KIND_AGENT_INSTANCE; absent otherwise.
   optional string agent_instance_id = 20;
+  // Optimistic concurrency token for lifecycle/identity changes. Zero means
+  // an older server, not an initial version. Metering alone does not change it.
+  uint64 lifecycle_revision = 21;
+  // Immutable during a live provisioning generation; retained across idle
+  // workload replacement. Never rebind a mismatched UID through reconciliation.
+  agynio.api.runner.v1.VolumeListItem bound_instance = 22;
+  VolumeRemovalIntent removal_intent = 23;
+  // Once enabled, legacy lifecycle writes must be rejected, including writes
+  // from older server binaries. It is never automatically disabled on reopen.
+  bool checked_lifecycle = 24;
 }
 
 enum AttachmentKind {
@@ -704,6 +718,65 @@ message UpdateVolumeRequest {
 }
 
 message UpdateVolumeResponse {
+  Volume volume = 1;
+}
+
+message VolumeRemovalIntent {
+  string id = 1;
+  agynio.api.runner.v1.VolumeListItem expected = 2;
+  google.protobuf.Timestamp requested_at = 3;
+  // Independent of removed_at, which ends metering. Set only after the checked
+  // runner response confirms absence for this same durable target.
+  optional google.protobuf.Timestamp confirmed_at = 4;
+}
+
+message CreateVolumeCheckedRequest {
+  // Initial status must be PROVISIONING. Existing closed records require the
+  // explicit revision-checked reopen operation, never implicit create reuse.
+  CreateVolumeRequest volume = 1;
+}
+
+message CreateVolumeCheckedResponse {
+  Volume volume = 1;
+}
+
+message BindVolumeInstance {
+  agynio.api.runner.v1.VolumeListItem instance = 1;
+}
+
+message BeginVolumeRemoval {}
+
+message ConfirmVolumeRemoval {
+  string intent_id = 1;
+}
+
+message FailVolumeProvisioning {}
+
+message ReopenVolume {
+  // All persistent ownership/definition/runner identity must match the closed
+  // record. An unconfirmed removal intent prevents reopening.
+  CreateVolumeRequest volume = 1;
+}
+
+message UpdateVolumeCheckedRequest {
+  string id = 1;
+  uint64 expected_revision = 2;
+  oneof operation {
+    // Bind a verified physical instance and activate its record. This may also
+    // protect a legacy record during an explicit, audited migration.
+    BindVolumeInstance bind = 3;
+    // Persist the bound target and enter DEPROVISIONING before any backend
+    // removal call. Retrying must use the stored target, never a new lookup.
+    BeginVolumeRemoval begin_removal = 4;
+    ConfirmVolumeRemoval confirm_removal = 5;
+    // Provisioning failures without a removal intent may be retained for
+    // explicit recovery; this does not prove that no late create can happen.
+    FailVolumeProvisioning fail_provisioning = 6;
+    ReopenVolume reopen = 7;
+  }
+}
+
+message UpdateVolumeCheckedResponse {
   Volume volume = 1;
 }
 
