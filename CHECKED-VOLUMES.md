@@ -16,11 +16,12 @@ Agyn architecture decision or a claim that deployed services implement it.
    that binding, using the expected lifecycle revision. Only after this commit
    may a caller invoke the runner. Lost acknowledgements require rereading the
    record, not constructing another deletion target from current inventory.
-4. Call `RemoveVolumeChecked` with the intent's exact target. A mismatch is a
+4. Call `RemoveVolumeBound` with the intent's exact target. A mismatch is a
    conflict, not absence and not permission to adopt the replacement.
 5. `PENDING` means the object still exists or deletion was requested. Only
    `ABSENT` authorizes `UpdateVolumeChecked(confirm_removal)` with the same
-   intent ID and record revision. Billing `removed_at` is not this evidence.
+   intent ID, verified backend ID and record revision. Both response states must
+   identify the expected backend. Billing `removed_at` is not this evidence.
 6. Explicit revision-checked `reopen` preserves all logical ownership fields.
    A pending deletion prevents reopen; a confirmed deleted generation clears
    its old binding/intent before a different physical incarnation is bound.
