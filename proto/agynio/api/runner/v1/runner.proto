@@ -12,6 +12,12 @@ service RunnerService {
 
   // Targets (containers today)
   rpc StartWorkload(StartWorkloadRequest) returns (StartWorkloadResponse);
+  // Two-phase execution. Never fall back to StartWorkload or name-only removal
+  // on Unimplemented. Persist and validate the preparation's immutable binding
+  // before activating; a lost reply is not permission to prepare/execute again.
+  rpc PrepareWorkload(PrepareWorkloadRequest) returns (PrepareWorkloadResponse);
+  rpc ActivateWorkload(ActivateWorkloadRequest) returns (ActivateWorkloadResponse);
+  rpc RemovePreparedWorkload(RemovePreparedWorkloadRequest) returns (RemovePreparedWorkloadResponse);
   rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
   rpc RemoveWorkload(RemoveWorkloadRequest) returns (RemoveWorkloadResponse);
 
@@ -215,6 +221,55 @@ message SidecarInstance {
   string name = 1;
   string id = 2;
   string status = 3;
+}
+
+// Backend and native workload incarnation, not merely the reusable Pod name.
+// Volumes enumerate every named volume, including volumes not mounted by main.
+// This is a provider assertion, not an authentication or node-fencing receipt.
+message WorkloadBinding {
+  string workload_id = 1;
+  string instance_uid = 2;
+  string backend_id = 3;
+  repeated VolumeListItem volumes = 4;
+}
+
+message PrepareWorkloadRequest {
+  StartWorkloadRequest workload = 1;
+  string backend_id = 2;
+  // All already-bound volumes must be supplied. They are never recreated or
+  // rebound by preparation. Omitted volumes are first-provision only; the
+  // caller must verify that against its durable registry before dispatch.
+  repeated VolumeListItem expected_volumes = 3;
+}
+
+message PrepareWorkloadResponse {
+  StartWorkloadResponse workload = 1;
+  // Preparation creates an unschedulable workload: no init, sidecar or main
+  // code may run until explicit activation of this exact binding.
+  WorkloadBinding binding = 2;
+}
+
+message ActivateWorkloadRequest {
+  WorkloadBinding expected = 1;
+}
+
+message ActivateWorkloadResponse {
+  WorkloadBinding binding = 1;
+}
+
+message RemovePreparedWorkloadRequest {
+  WorkloadBinding expected = 1;
+}
+
+enum PreparedWorkloadRemovalState {
+  PREPARED_WORKLOAD_REMOVAL_STATE_UNSPECIFIED = 0;
+  PREPARED_WORKLOAD_REMOVAL_STATE_PENDING = 1;
+  PREPARED_WORKLOAD_REMOVAL_STATE_ABSENT = 2;
+}
+
+message RemovePreparedWorkloadResponse {
+  PreparedWorkloadRemovalState state = 1;
+  WorkloadBinding binding = 2;
 }
 
 message StartWorkloadResponse {
