@@ -352,10 +352,18 @@ message VolumeListItem {
   string instance_uid = 3;
   // Persistent ownership labels only, not workload/turn labels or credentials.
   map<string, string> identity_labels = 4;
+  // Opaque identity of the storage scope, at most 512 UTF-8 bytes without
+  // surrounding whitespace. Stable across runner restarts, but changed when
+  // the runner points to another backend or the scope is replaced. Empty on
+  // older runners; never infer it from a request, route, or PVC name/UID.
+  string backend_id = 5;
 }
 
 message ListVolumesResponse {
   repeated VolumeListItem volumes = 1;
+  // Required even for an empty inventory. Every item must have this identity.
+  // Callers must retain existing bindings if the backend differs or is unknown.
+  string backend_id = 2;
 }
 
 message RemoveVolumeRequest {
@@ -384,6 +392,10 @@ enum VolumeRemovalState {
 
 message RemoveVolumeCheckedResponse {
   VolumeRemovalState state = 1;
+  // Identity actually observed by the backend for this operation, not an echo
+  // of unverified input. The caller must match it against the stored intent
+  // before accepting PENDING or ABSENT. Missing identity is not confirmation.
+  string backend_id = 2;
 }
 
 message TouchWorkloadRequest {

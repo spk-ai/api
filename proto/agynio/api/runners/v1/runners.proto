@@ -738,6 +738,10 @@ message BeginVolumeRemoval {}
 
 message ConfirmVolumeRemoval {
   string intent_id = 1;
+  // Must match the immutable target and the checked runner's ABSENT response.
+  // This is a trusted control-plane assertion, not independent authentication
+  // or evidence of node fencing. Older callers without it must be rejected.
+  string backend_id = 2;
 }
 
 message FailVolumeProvisioning {}
