@@ -16,6 +16,13 @@ service RunnerService {
   // on Unimplemented. Persist and validate the preparation's immutable binding
   // before activating; a lost reply is not permission to prepare/execute again.
   rpc PrepareWorkload(PrepareWorkloadRequest) returns (PrepareWorkloadResponse);
+  // Reserve and persist exact native owner UIDs before authorizing any Pod/PVC
+  // creation. These additive capabilities never fall back to unanchored start.
+  rpc ReserveResourceAnchor(ReserveResourceAnchorRequest) returns (ReserveResourceAnchorResponse);
+  rpc PrepareAnchoredWorkload(PrepareAnchoredWorkloadRequest) returns (PrepareAnchoredWorkloadResponse);
+  // Revokes only a workload anchor, never its durable volume anchors. Anchor
+  // absence is not child-resource absence, node fencing or credential cleanup.
+  rpc RemoveWorkloadAnchor(RemoveWorkloadAnchorRequest) returns (RemoveWorkloadAnchorResponse);
   rpc ActivateWorkload(ActivateWorkloadRequest) returns (ActivateWorkloadResponse);
   // Read-only health inspection of an already recorded incarnation. Never
   // substitute name-only inspection or activation as a liveness probe.
@@ -239,6 +246,74 @@ message WorkloadBinding {
   string instance_uid = 2;
   string backend_id = 3;
   repeated VolumeListItem volumes = 4;
+  ResourceAnchor anchor = 5;
+}
+
+enum ResourceAnchorKind {
+  RESOURCE_ANCHOR_KIND_UNSPECIFIED = 0;
+  RESOURCE_ANCHOR_KIND_WORKLOAD = 1;
+  RESOURCE_ANCHOR_KIND_VOLUME = 2;
+}
+
+// A native owner incarnation, persisted before granting creation authority.
+// Kubernetes uses same-namespace ConfigMap owner UIDs; names are derived from
+// kind/resource_id, never caller-selected. It is not authenticated authority.
+message ResourceAnchor {
+  ResourceAnchorKind kind = 1;
+  string resource_id = 2;
+  string backend_id = 3;
+  string instance_uid = 4;
+  // Bounded manager and owner identities only, with volume-key for volumes.
+  // No prompts, credentials, image configuration or arbitrary labels.
+  map<string, string> identity_labels = 5;
+}
+
+message ReserveResourceAnchorRequest {
+  // instance_uid must be empty. Reserving creates metadata only. A matching
+  // existing anchor may be observed; a different returned UID cannot replace
+  // an already persisted generation or authorize replay.
+  ResourceAnchor intent = 1;
+}
+
+message ReserveResourceAnchorResponse {
+  ResourceAnchor anchor = 1;
+}
+
+message PrepareAnchoredWorkloadRequest {
+  PrepareWorkloadRequest preparation = 1;
+  // Select one native Pod UID on this owner before credentials, then claim
+  // activation on the same owner before releasing any execution gate. Those
+  // writes and revocation contend using exact UID/revision preconditions.
+  // An already consumed owner never authorizes replacement preparation.
+  ResourceAnchor workload_anchor = 2;
+  // Exact anchors for every named volume, including first provision. Volume
+  // anchors outlive workload anchors and are never removed on compute release.
+  repeated ResourceAnchor volume_anchors = 3;
+}
+
+message PrepareAnchoredWorkloadResponse {
+  StartWorkloadResponse workload = 1;
+  WorkloadBinding binding = 2;
+}
+
+message RemoveWorkloadAnchorRequest {
+  // Caller must first persist retirement excluding any new activation. For
+  // any native activation claim, even with a lost acknowledgement or a gate
+  // still present, exact Pod removal must precede anchor revocation.
+  ResourceAnchor expected = 1;
+}
+
+enum ResourceAnchorRemovalState {
+  RESOURCE_ANCHOR_REMOVAL_STATE_UNSPECIFIED = 0;
+  RESOURCE_ANCHOR_REMOVAL_STATE_PENDING = 1;
+  RESOURCE_ANCHOR_REMOVAL_STATE_ABSENT = 2;
+}
+
+message RemoveWorkloadAnchorResponse {
+  ResourceAnchor anchor = 1;
+  // Only the expected anchor's absence, not absence of delayed children.
+  // Late gated Pods retain the deleted owner UID and require observed GC.
+  ResourceAnchorRemovalState state = 2;
 }
 
 message PrepareWorkloadRequest {
@@ -473,6 +548,9 @@ message VolumeListItem {
   // the runner points to another backend or the scope is replaced. Empty on
   // older runners; never infer it from a request, route, or PVC name/UID.
   string backend_id = 5;
+  // Exact persistent volume owner incarnation, independent of any workload.
+  // Unanchored deletion APIs must reject anchored volumes even if now absent.
+  ResourceAnchor anchor = 6;
 }
 
 message ListVolumesResponse {

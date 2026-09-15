@@ -108,6 +108,40 @@ retry discovery state. Initially absent or delayed Pod/PVC creates, old ownerles
 Secrets, external credential revocation, authenticated routes, all-writer
 enforcement and node/storage fencing still require separate mechanisms.
 
+## Resource Anchors
+
+`feat/resource-anchors` depends on the observation API `d6449dd`. It adds
+`ReserveResourceAnchor`, `PrepareAnchoredWorkload` and `RemoveWorkloadAnchor`.
+The registry must persist the exact workload and volume anchor UIDs **before**
+authorizing any native Pod/PVC creation. This registry/controller integration
+is not yet implemented by this API proposal.
+
+An anchor is a metadata-only native owner with bounded identities. Workload
+anchors own gated Pods; separate volume anchors own persistent workspaces.
+Each Pod/PVC CREATE carries its owner's exact UID. Pod credentials remain
+owned by that Pod UID. Workload/volume bindings and inventory retain the
+anchors; callers must not discard them or fall back to unanchored APIs.
+
+Before creating credentials, the runner pins one Pod UID on its workload
+anchor. Before any activation writes, it records an activation claim on that
+same anchor. Selection, activation and revocation use exact UID/revision
+preconditions. Revocation either wins that conflict or must retire the exact
+potentially activated Pod first, even if a gate PATCH has not completed.
+Repeated activation of the same binding is not preparation or agent replay.
+
+A delayed Pod CREATE after revocation retains the old owner UID and remains
+gated. The caller must separately observe child garbage collection; anchor
+ABSENT is not workload/credential absence. A replacement same-name anchor is
+not the original authority. Delayed PVC creation retains the separate volume
+anchor and does not justify deleting the workspace.
+
+Workload-anchor retirement cannot delete volume anchors. Anchored volume
+retirement needs a distinct checked contract; the old `RemoveVolumeBound`
+method must reject an explicitly anchored target even if its PVC is absent.
+Registry persistence, all-writer guards, delayed hold reconciliation, legacy
+adoption, authenticated owner/backend routes, node/storage fencing and a
+coordinated rollout remain required. This is not a drop-in or production API.
+
 ## References
 
 [Scheduling readiness](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-scheduling-readiness/)
