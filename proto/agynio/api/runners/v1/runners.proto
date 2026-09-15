@@ -48,6 +48,11 @@ service RunnersService {
   // Explicit opt-in; an old registry must fail closed with Unimplemented.
   rpc CreatePreparedWorkload(CreatePreparedWorkloadRequest) returns (CreatePreparedWorkloadResponse);
   rpc UpdatePreparedWorkload(UpdatePreparedWorkloadRequest) returns (UpdatePreparedWorkloadResponse);
+  // Distinct capabilities: never fall back to the unanchored prepared methods.
+  // Native owner UIDs must be durably bound before preparation is authorized.
+  rpc CreateAnchoredWorkload(CreateAnchoredWorkloadRequest) returns (CreateAnchoredWorkloadResponse);
+  rpc BindWorkloadResourceAnchors(BindWorkloadResourceAnchorsRequest) returns (BindWorkloadResourceAnchorsResponse);
+  rpc UpdateAnchoredWorkload(UpdateAnchoredWorkloadRequest) returns (UpdateAnchoredWorkloadResponse);
   rpc UpdateWorkload(UpdateWorkloadRequest) returns (UpdateWorkloadResponse);
   rpc UpdateWorkloadStatus(UpdateWorkloadStatusRequest) returns (UpdateWorkloadStatusResponse);
   rpc ReportWorkloadState(ReportWorkloadStateRequest) returns (ReportWorkloadStateResponse);
@@ -458,6 +463,45 @@ message PreparedWorkloadLifecycle {
   repeated string volume_ids = 4;
   agynio.api.runner.v1.WorkloadBinding binding = 5;
   agynio.api.runner.v1.RemovePreparedWorkloadResponse removal_observation = 6;
+  // Present from anchored reservation onward, even before any UID is bound.
+  // Its revision fences older writers that only know preparation.revision.
+  WorkloadResourceAnchors resources = 7;
+}
+
+message WorkloadResourceAnchors {
+  uint64 revision = 1;
+  agynio.api.runner.v1.ResourceAnchor workload = 2;
+  repeated agynio.api.runner.v1.ResourceAnchor volumes = 3;
+}
+
+message CreateAnchoredWorkloadRequest {
+  CreatePreparedWorkloadRequest preparation = 1;
+}
+
+message CreateAnchoredWorkloadResponse {
+  Workload workload = 1;
+}
+
+message BindWorkloadResourceAnchorsRequest {
+  string id = 1;
+  uint64 expected_preparation_revision = 2;
+  uint64 expected_anchor_revision = 3;
+  agynio.api.runner.v1.ResourceAnchor workload_anchor = 4;
+  // Bind every volume's anchor in its checked registry record first.
+  repeated agynio.api.runner.v1.ResourceAnchor volume_anchors = 5;
+}
+
+message BindWorkloadResourceAnchorsResponse {
+  Workload workload = 1;
+}
+
+message UpdateAnchoredWorkloadRequest {
+  UpdatePreparedWorkloadRequest operation = 1;
+  uint64 expected_anchor_revision = 2;
+}
+
+message UpdateAnchoredWorkloadResponse {
+  Workload workload = 1;
 }
 
 message CreatePreparedWorkloadRequest {
@@ -744,6 +788,11 @@ message Volume {
   // Once enabled, legacy lifecycle writes must be rejected, including writes
   // from older server binaries. It is never automatically disabled on reopen.
   bool checked_lifecycle = 24;
+  // Pinned before native PVC creation, not learned from a later PVC binding.
+  agynio.api.runner.v1.ResourceAnchor resource_anchor = 25;
+  // Immutable receipt for the reservation that first bound the volume anchor.
+  // Later turns reuse this receipt, not their replacement workload's identity.
+  VolumeAnchorReservation anchor_reservation = 26;
 }
 
 enum AttachmentKind {
@@ -846,6 +895,20 @@ message ReopenVolume {
   CreateVolumeRequest volume = 1;
 }
 
+message VolumeAnchorReservation {
+  string workload_id = 1;
+  uint64 preparation_revision = 2;
+  uint64 resource_revision = 3;
+}
+
+message BindVolumeResourceAnchor {
+  agynio.api.runner.v1.ResourceAnchor anchor = 1;
+  // The exact anchored reservation, before native preparation authorization.
+  string workload_id = 2;
+  uint64 expected_preparation_revision = 3;
+  uint64 expected_anchor_revision = 4;
+}
+
 message UpdateVolumeCheckedRequest {
   string id = 1;
   uint64 expected_revision = 2;
@@ -861,6 +924,8 @@ message UpdateVolumeCheckedRequest {
     // explicit recovery; this does not prove that no late create can happen.
     FailVolumeProvisioning fail_provisioning = 6;
     ReopenVolume reopen = 7;
+    // Metadata-only binding; unsupported servers must reject this operation.
+    BindVolumeResourceAnchor bind_anchor = 8;
   }
 }
 
