@@ -11,6 +11,9 @@ separates explicit workspace deletion from idle compute release.
 [Preparation revocation](PREPARATION-REVOCATION.md) adds durable recovery for
 interrupted, unbound provisioning without replaying execution.
 
+[Existing volume adoption](VOLUME-ANCHOR-ADOPTION.md) adds an explicit native
+migration receipt for original PVCs, distinct from first allocation.
+
 ## Protobuf layout
 Protobuf sources live under:
 
