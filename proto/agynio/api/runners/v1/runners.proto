@@ -472,6 +472,12 @@ message WorkloadResourceAnchors {
   uint64 revision = 1;
   agynio.api.runner.v1.ResourceAnchor workload = 2;
   repeated agynio.api.runner.v1.ResourceAnchor volumes = 3;
+  // Immutable native proof that activation was revoked before it was claimed.
+  // Recording this never invents a Pod binding or confirms resource cleanup.
+  agynio.api.runner.v1.PreparationRevocation preparation_revocation = 4;
+  // Written only after the preceding revocation was durably recorded. This
+  // proves current owner/Pod absence, not node fencing or future-create exclusion.
+  agynio.api.runner.v1.ObservePreparationRevocationResponse revocation_observation = 5;
 }
 
 message CreateAnchoredWorkloadRequest {
@@ -539,6 +545,20 @@ message ConfirmPreparedWorkloadRemoval {
 
 message AbortWorkloadReservation {}
 
+message RecordPreparationRevocation {
+  // Anchored REMOVING only, with no prepared Pod binding. Caller must
+  // authenticate the native route and match every persisted resource anchor.
+  agynio.api.runner.v1.PreparationRevocation revocation = 1;
+}
+
+message ConfirmPreparationRevocation {
+  // Requires the exact previously recorded revocation, current POD_ABSENT, and
+  // a complete disjoint volume inventory. Found PVCs must be checked-bound
+  // first. An absent PVC is allowed only for the original unbound reservation;
+  // a known workspace UID must never be replaced or inferred absent safely.
+  agynio.api.runner.v1.ObservePreparationRevocationResponse observation = 1;
+}
+
 message UpdatePreparedWorkloadRequest {
   string id = 1;
   uint64 expected_revision = 2;
@@ -554,6 +574,9 @@ message UpdatePreparedWorkloadRequest {
     ConfirmPreparedWorkloadRemoval confirm_removal = 8;
     // Only RESERVED, where no native preparation was authorized, may abort.
     AbortWorkloadReservation abort_reservation = 9;
+    // These operations require UpdateAnchoredWorkload and both revisions.
+    RecordPreparationRevocation record_revocation = 10;
+    ConfirmPreparationRevocation confirm_revocation = 11;
   }
 }
 

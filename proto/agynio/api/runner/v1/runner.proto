@@ -23,6 +23,12 @@ service RunnerService {
   // Revokes only a workload anchor, never its durable volume anchors. Anchor
   // absence is not child-resource absence, node fencing or credential cleanup.
   rpc RemoveWorkloadAnchor(RemoveWorkloadAnchorRequest) returns (RemoveWorkloadAnchorResponse);
+  // Revoke activation on the exact owner revision and persist the unactivated
+  // decision before owner deletion. Never infer this receipt from NotFound.
+  rpc RevokeWorkloadPreparation(RevokeWorkloadPreparationRequest) returns (RevokeWorkloadPreparationResponse);
+  // Read-only cleanup and workspace discovery against the durable revocation.
+  // Late gated children may still appear; this is not future-write/node fencing.
+  rpc ObservePreparationRevocation(ObservePreparationRevocationRequest) returns (ObservePreparationRevocationResponse);
   rpc ActivateWorkload(ActivateWorkloadRequest) returns (ActivateWorkloadResponse);
   // Read-only health inspection of an already recorded incarnation. Never
   // substitute name-only inspection or activation as a liveness probe.
@@ -326,6 +332,49 @@ message PrepareWorkloadRequest {
   // rebound by preparation. Omitted volumes are first-provision only; the
   // caller must verify that against its durable registry before dispatch.
   repeated VolumeListItem expected_volumes = 3;
+}
+
+message PreparationRevocation {
+  ResourceAnchor workload_anchor = 1;
+  repeated ResourceAnchor volume_anchors = 2;
+  // Native immutable revocation-record UID, distinct from the workload owner
+  // and any Pod. The record must survive owner/Pod deletion and runner restart.
+  string instance_uid = 3;
+  // Selected Pod UID, if selection preceded revocation. Activation must never
+  // have been claimed, even if that Pod is currently absent or still gated.
+  string selected_pod_uid = 4;
+}
+
+message RevokeWorkloadPreparationRequest {
+  ResourceAnchor workload_anchor = 1;
+  repeated ResourceAnchor volume_anchors = 2;
+}
+
+message RevokeWorkloadPreparationResponse {
+  PreparationRevocation revocation = 1;
+}
+
+message ObservePreparationRevocationRequest {
+  PreparationRevocation expected = 1;
+}
+
+enum RevokedPreparationState {
+  REVOKED_PREPARATION_STATE_UNSPECIFIED = 0;
+  REVOKED_PREPARATION_STATE_PENDING = 1;
+  // The original owner and Pod are absent now. Revocation prevents activation
+  // through this owner UID; it does not assert absence of future late creates.
+  REVOKED_PREPARATION_STATE_POD_ABSENT = 2;
+}
+
+message ObservePreparationRevocationResponse {
+  PreparationRevocation revocation = 1;
+  RevokedPreparationState state = 2;
+  // Only at POD_ABSENT: a complete disjoint partition of the recorded volume
+  // anchors. Existing PVCs retain their exact owner/binding; no PVC is created
+  // or deleted. Callers must validate and durably bind discovered first-provision
+  // identities before releasing admission, never replace a known bound UID.
+  repeated VolumeListItem volumes = 3;
+  repeated string absent_volume_ids = 4;
 }
 
 message PrepareWorkloadResponse {
