@@ -8,6 +8,9 @@ not a released capability. See [CHECKED-VOLUMES.md](CHECKED-VOLUMES.md).
 The dependent [anchored retirement contract](ANCHORED-VOLUME-RETIREMENT.md)
 separates explicit workspace deletion from idle compute release.
 
+[Preparation revocation](PREPARATION-REVOCATION.md) adds durable recovery for
+interrupted, unbound provisioning without replaying execution.
+
 ## Protobuf layout
 Protobuf sources live under:
 
