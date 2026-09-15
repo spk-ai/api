@@ -19,6 +19,14 @@ service RunnerService {
   // Reserve and persist exact native owner UIDs before authorizing any Pod/PVC
   // creation. These additive capabilities never fall back to unanchored start.
   rpc ReserveResourceAnchor(ReserveResourceAnchorRequest) returns (ReserveResourceAnchorResponse);
+  // Explicit migration of a previously bound workspace, never first provision.
+  // Caller must durably block owner admission and drain every old writer before
+  // reserve/apply, persist the returned identities, and retain that block until
+  // finalized native evidence is committed. These RPCs do not fence nodes.
+  rpc ReserveVolumeAnchorAdoption(ReserveVolumeAnchorAdoptionRequest) returns (ReserveVolumeAnchorAdoptionResponse);
+  rpc ApplyVolumeAnchorAdoption(ApplyVolumeAnchorAdoptionRequest) returns (ApplyVolumeAnchorAdoptionResponse);
+  rpc ObserveVolumeAnchorAdoption(ObserveVolumeAnchorAdoptionRequest) returns (ObserveVolumeAnchorAdoptionResponse);
+  rpc FinalizeVolumeAnchorAdoption(FinalizeVolumeAnchorAdoptionRequest) returns (FinalizeVolumeAnchorAdoptionResponse);
   rpc PrepareAnchoredWorkload(PrepareAnchoredWorkloadRequest) returns (PrepareAnchoredWorkloadResponse);
   // Revokes only a workload anchor, never its durable volume anchors. Anchor
   // absence is not child-resource absence, node fencing or credential cleanup.
@@ -286,6 +294,75 @@ message ReserveResourceAnchorRequest {
 
 message ReserveResourceAnchorResponse {
   ResourceAnchor anchor = 1;
+}
+
+// Immutable native migration journal, distinct from an allocation reservation.
+// A missing journal/owner/PVC or mismatched UID is unresolved, never permission
+// to recreate storage or adopt a replacement. Persist the entire receipt.
+message VolumeAnchorAdoption {
+  string id = 1;
+  VolumeListItem previous = 2;
+  ResourceAnchor anchor = 3;
+  // UID of the native journal, not the PVC or its persistent owner.
+  string instance_uid = 4;
+  // Native SHA-256 of the original PVC spec; never a caller-selected mutation.
+  string pvc_spec_sha256 = 5;
+}
+
+message ReserveVolumeAnchorAdoptionRequest {
+  string id = 1;
+  // Complete original bound identity, without an anchor. PVC must still exist.
+  VolumeListItem expected = 2;
+  // Matching volume owner intent; instance_uid is empty until reserved.
+  ResourceAnchor intent = 3;
+}
+
+message ReserveVolumeAnchorAdoptionResponse {
+  // Native owner must pin this journal UID before acknowledging the receipt.
+  // Losing the pinned journal is not permission to create another incarnation.
+  VolumeAnchorAdoption adoption = 1;
+}
+
+enum VolumeAnchorAdoptionState {
+  VOLUME_ANCHOR_ADOPTION_STATE_UNSPECIFIED = 0;
+  VOLUME_ANCHOR_ADOPTION_STATE_RESERVED = 1;
+  // Original PVC attached atomically with a migration hold. Not ready for use.
+  VOLUME_ANCHOR_ADOPTION_STATE_APPLIED = 2;
+  // Original PVC/owner observed after the separate finalization step.
+  VOLUME_ANCHOR_ADOPTION_STATE_READY = 3;
+}
+
+message ApplyVolumeAnchorAdoptionRequest {
+  VolumeAnchorAdoption adoption = 1;
+}
+
+message ApplyVolumeAnchorAdoptionResponse {
+  VolumeAnchorAdoption adoption = 1;
+  VolumeListItem volume = 2;
+  VolumeAnchorAdoptionState state = 3;
+}
+
+message ObserveVolumeAnchorAdoptionRequest {
+  VolumeAnchorAdoption adoption = 1;
+}
+
+message ObserveVolumeAnchorAdoptionResponse {
+  VolumeAnchorAdoption adoption = 1;
+  // Same original PVC. Anchor is absent while state is RESERVED.
+  VolumeListItem volume = 2;
+  VolumeAnchorAdoptionState state = 3;
+}
+
+message FinalizeVolumeAnchorAdoptionRequest {
+  // Caller must already have persisted the applied original-PVC binding under
+  // its owner-admission block. Finalization removes only this operation's hold.
+  VolumeAnchorAdoption adoption = 1;
+}
+
+message FinalizeVolumeAnchorAdoptionResponse {
+  VolumeAnchorAdoption adoption = 1;
+  VolumeListItem volume = 2;
+  VolumeAnchorAdoptionState state = 3;
 }
 
 message PrepareAnchoredWorkloadRequest {
