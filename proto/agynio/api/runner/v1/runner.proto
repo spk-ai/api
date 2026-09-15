@@ -20,6 +20,11 @@ service RunnerService {
   // Read-only health inspection of an already recorded incarnation. Never
   // substitute name-only inspection or activation as a liveness probe.
   rpc InspectPreparedWorkload(InspectPreparedWorkloadRequest) returns (InspectPreparedWorkloadResponse);
+  // Read-only discovery after a lost preparation reply. Only unactivated,
+  // gated workloads with atomic startup-credential ownership may be observed.
+  // Persist removal intent and validate/persist the returned owner and binding
+  // before cleanup. Never use discovery to authorize activation or replay.
+  rpc ObserveWorkloadPreparation(ObserveWorkloadPreparationRequest) returns (ObserveWorkloadPreparationResponse);
   rpc RemovePreparedWorkload(RemovePreparedWorkloadRequest) returns (RemovePreparedWorkloadResponse);
   rpc StopWorkload(StopWorkloadRequest) returns (StopWorkloadResponse);
   rpc RemoveWorkload(RemoveWorkloadRequest) returns (RemoveWorkloadResponse);
@@ -273,6 +278,25 @@ message InspectPreparedWorkloadResponse {
   bool activated = 3;
   bool removal_pending = 4;
   string resource_version = 5;
+}
+
+message ObserveWorkloadPreparationRequest {
+  // Identity of the original durable preparation intent, not a Pod name.
+  string workload_id = 1;
+  string backend_id = 2;
+}
+
+message ObserveWorkloadPreparationResponse {
+  WorkloadBinding binding = 1;
+  // Bounded projection: manager, agent-instance/agent/thread or sandbox/owner
+  // labels. The controller must match these against its durable owner record.
+  map<string, string> identity_labels = 2;
+  string resource_version = 3;
+  // Credential setup finished, not authorization to execute or retry startup.
+  bool setup_complete = 4;
+  bool removal_pending = 5;
+  // NotFound is an observation failure, never confirmation that a delayed
+  // prepare/create cannot complete later. No absent/safe-to-retry state exists.
 }
 
 message RemovePreparedWorkloadRequest {

@@ -83,6 +83,31 @@ late-operation reconciliation and node/storage fencing remain separate gates.
 Cancellation after ACTIVATING cannot retract an already in-flight native call.
 These registry methods are distinct capabilities with no legacy fallback.
 
+## Lost Preparation Observation
+
+`feat/prepared-outcome-observation` is an additive follow-up to the inspection
+API `24b73ca`. It introduces `ObserveWorkloadPreparation` without changing the
+registry schema or the existing prepare/activate/remove messages. Lint and
+breaking-change checks against the inspection proposal pass.
+
+The request carries the original durable workload intent and backend ID. The
+native implementation may return only an unactivated, unscheduled, gated Pod
+with no container-execution evidence and confirmed atomic startup-Secret
+ownership semantics. The response contains its complete exact binding, bounded
+owner/manager labels, Pod resource version, setup-complete flag and pending-
+deletion flag. Neither boolean authorizes activation or retry.
+
+The controller must first durably enter REMOVING, compare the observation with
+its complete owner/volume intent, persist exact checked-volume and workload
+bindings, then use the existing exact-binding removal contract. A late prepare
+reply may supply the same binding into REMOVING; it cannot reopen execution.
+
+NotFound, Unimplemented, old ownership semantics, changed snapshots and any
+identity mismatch retain admission. There is deliberately no absent/safe-to-
+retry discovery state. Initially absent or delayed Pod/PVC creates, old ownerless
+Secrets, external credential revocation, authenticated routes, all-writer
+enforcement and node/storage fencing still require separate mechanisms.
+
 ## References
 
 [Scheduling readiness](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-scheduling-readiness/)
