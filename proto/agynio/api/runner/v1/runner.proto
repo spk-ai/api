@@ -57,6 +57,9 @@ service RunnerService {
   // Backend-bound deletion is a separate capability. Older runners must return
   // Unimplemented, never silently ignore an added deletion precondition.
   rpc RemoveVolumeBound(RemoveVolumeBoundRequest) returns (RemoveVolumeBoundResponse);
+  // Retire an exact bound PVC and its persistent owner. No fallback to the
+  // unanchored APIs; callers must first exclude new workload admission durably.
+  rpc RemoveVolumeAnchored(RemoveVolumeAnchoredRequest) returns (RemoveVolumeAnchoredResponse);
 
   rpc TouchWorkload(TouchWorkloadRequest) returns (TouchWorkloadResponse);
 
@@ -601,6 +604,22 @@ message RemoveVolumeBoundResponse {
   // of unverified input. The caller must match it against the stored intent
   // before accepting PENDING or ABSENT. Missing identity is not confirmation.
   string backend_id = 2;
+}
+
+message RemoveVolumeAnchoredRequest {
+  // Complete bound PVC identity including its persisted VOLUME anchor. An
+  // unbound/unknown first provision needs separate reconciliation, not adoption.
+  VolumeListItem expected = 1;
+}
+
+message RemoveVolumeAnchoredResponse {
+  // ABSENT requires separate observations of PVC and owner absence in the
+  // pinned backend. A DELETE acknowledgement, GC request or held claim is not
+  // confirmation. Late children remain owned by the revoked UID and require
+  // GC; this is not future-write exclusion or storage/node fencing.
+  VolumeRemovalState state = 1;
+  string backend_id = 2;
+  ResourceAnchor anchor = 3;
 }
 
 message TouchWorkloadRequest {

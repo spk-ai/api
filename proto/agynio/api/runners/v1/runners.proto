@@ -793,6 +793,10 @@ message Volume {
   // Immutable receipt for the reservation that first bound the volume anchor.
   // Later turns reuse this receipt, not their replacement workload's identity.
   VolumeAnchorReservation anchor_reservation = 26;
+  // Persisted only by the anchored confirmation operation, alongside the
+  // original immutable removal intent. Never authorize reopening from this
+  // current-absence observation alone.
+  agynio.api.runner.v1.RemoveVolumeAnchoredResponse anchored_removal_observation = 27;
 }
 
 enum AttachmentKind {
@@ -861,6 +865,9 @@ message VolumeRemovalIntent {
   // Independent of removed_at, which ends metering. Set only after the checked
   // runner response confirms absence for this same durable target.
   optional google.protobuf.Timestamp confirmed_at = 4;
+  // Selects the distinct PVC-and-owner retirement contract. Immutable from
+  // begin through confirmation; old checked operations cannot substitute.
+  bool anchored = 5;
 }
 
 message CreateVolumeCheckedRequest {
@@ -885,6 +892,15 @@ message ConfirmVolumeRemoval {
   // This is a trusted control-plane assertion, not independent authentication
   // or evidence of node fencing. Older callers without it must be rejected.
   string backend_id = 2;
+}
+
+message BeginAnchoredVolumeRemoval {}
+
+message ConfirmAnchoredVolumeRemoval {
+  string intent_id = 1;
+  // Exact native ABSENT response, matched against the persisted target and
+  // anchor. A control-plane assertion, not authenticated fencing evidence.
+  agynio.api.runner.v1.RemoveVolumeAnchoredResponse observation = 2;
 }
 
 message FailVolumeProvisioning {}
@@ -926,6 +942,8 @@ message UpdateVolumeCheckedRequest {
     ReopenVolume reopen = 7;
     // Metadata-only binding; unsupported servers must reject this operation.
     BindVolumeResourceAnchor bind_anchor = 8;
+    BeginAnchoredVolumeRemoval begin_anchored_removal = 9;
+    ConfirmAnchoredVolumeRemoval confirm_anchored_removal = 10;
   }
 }
 
