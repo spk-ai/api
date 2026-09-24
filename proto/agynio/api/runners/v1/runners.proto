@@ -74,6 +74,12 @@ service RunnersService {
   // added precondition fields. Checked callers must not use legacy fallback.
   rpc CreateVolumeChecked(CreateVolumeCheckedRequest) returns (CreateVolumeCheckedResponse);
   rpc UpdateVolumeChecked(UpdateVolumeCheckedRequest) returns (UpdateVolumeCheckedResponse);
+  // Operator-coordinated migration only, after all old writers are drained.
+  // The registry blocks the entire owner until independently observed native
+  // readiness is persisted for every original volume. No legacy fallback.
+  rpc BeginVolumeAnchorMigration(BeginVolumeAnchorMigrationRequest) returns (BeginVolumeAnchorMigrationResponse);
+  rpc GetVolumeAnchorMigration(GetVolumeAnchorMigrationRequest) returns (GetVolumeAnchorMigrationResponse);
+  rpc AdvanceVolumeAnchorMigration(AdvanceVolumeAnchorMigrationRequest) returns (AdvanceVolumeAnchorMigrationResponse);
   rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse);
   rpc ListVolumes(ListVolumesRequest) returns (ListVolumesResponse);
   rpc ListVolumesByThread(ListVolumesByThreadRequest) returns (ListVolumesByThreadResponse);
@@ -820,6 +826,91 @@ message Volume {
   // original immutable removal intent. Never authorize reopening from this
   // current-absence observation alone.
   agynio.api.runner.v1.RemoveVolumeAnchoredResponse anchored_removal_observation = 27;
+  // Existing-storage provenance, mutually exclusive with anchor_reservation.
+  // Retains the original native identity; never an allocation reservation.
+  agynio.api.runner.v1.VolumeAnchorAdoption anchor_adoption = 28;
+}
+
+message VolumeAnchorMigrationSource {
+  string volume_id = 1;
+  uint64 expected_revision = 2;
+  // Independently observed original native binding, without an anchor.
+  // Omit only for an unbound failed generation: it stays quarantined, not ready.
+  agynio.api.runner.v1.VolumeListItem previous = 3;
+}
+
+message VolumeAnchorMigrationEntry {
+  VolumeAnchorMigrationSource source = 1;
+  // Revision after explicit legacy checked-binding adoption, if required.
+  uint64 checked_revision = 2;
+  // Persisted before any native call. Retries retain this operation ID.
+  string adoption_id = 3;
+  agynio.api.runner.v1.ResourceAnchor intent = 4;
+  // Append-only evidence: receipt, applied binding, independent ready read.
+  agynio.api.runner.v1.VolumeAnchorAdoption adoption = 5;
+  agynio.api.runner.v1.ApplyVolumeAnchorAdoptionResponse applied = 6;
+  agynio.api.runner.v1.ObserveVolumeAnchorAdoptionResponse ready = 7;
+  string unresolved_reason = 8;
+}
+
+message VolumeAnchorMigration {
+  string id = 1;
+  RuntimeOwnerKind owner_kind = 2;
+  string owner_id = 3;
+  string runner_id = 4;
+  string organization_id = 5;
+  string backend_id = 6;
+  uint64 revision = 7;
+  repeated VolumeAnchorMigrationEntry entries = 8;
+  // Immutable once true. False blocks both agent and sandbox admission,
+  // including legacy/raw registry writers. Never infer readiness from absence.
+  bool complete = 9;
+}
+
+message BeginVolumeAnchorMigrationRequest {
+  string id = 1;
+  RuntimeOwnerKind owner_kind = 2;
+  string owner_id = 3;
+  string runner_id = 4;
+  string organization_id = 5;
+  string backend_id = 6;
+  // Exact complete owner inventory, not an active-only or paginated subset.
+  repeated VolumeAnchorMigrationSource sources = 7;
+}
+
+message BeginVolumeAnchorMigrationResponse {
+  VolumeAnchorMigration migration = 1;
+}
+
+message GetVolumeAnchorMigrationRequest {
+  RuntimeOwnerKind owner_kind = 1;
+  string owner_id = 2;
+}
+
+message GetVolumeAnchorMigrationResponse {
+  VolumeAnchorMigration migration = 1;
+}
+
+message CompleteVolumeAnchorMigration {}
+
+message AdvanceVolumeAnchorMigrationRequest {
+  RuntimeOwnerKind owner_kind = 1;
+  string owner_id = 2;
+  string id = 3;
+  uint64 expected_revision = 4;
+  // Empty only for complete. Mutation is checked against stored source and
+  // native journal/owner/PVC UIDs; stale replies cannot replace identities.
+  string volume_id = 5;
+  oneof operation {
+    agynio.api.runner.v1.VolumeAnchorAdoption reserve = 6;
+    agynio.api.runner.v1.ApplyVolumeAnchorAdoptionResponse apply = 7;
+    agynio.api.runner.v1.ObserveVolumeAnchorAdoptionResponse ready = 8;
+    CompleteVolumeAnchorMigration complete = 9;
+  }
+}
+
+message AdvanceVolumeAnchorMigrationResponse {
+  VolumeAnchorMigration migration = 1;
 }
 
 enum AttachmentKind {
