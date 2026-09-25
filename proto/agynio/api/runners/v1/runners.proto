@@ -450,6 +450,14 @@ message Workload {
   PreparedWorkloadLifecycle preparation = 29;
 }
 
+// Reserve STARTING without native authority, then CAS preparation, bind exact
+// checked volumes/Pod, CAS activation and confirm its acknowledgement. Any
+// post-reservation nonterminal phase may enter REMOVING. RESERVED alone may abort
+// without native evidence; a late binding in REMOVING permits cleanup only.
+// Unknown preparation retains admission, even with zero volumes or billing ended.
+// Recovery reads the same record; it must not prepare or replay agent messages.
+// @see runners::internal/server/prepared_workloads
+// @see orchestrator::internal/reconciler/prepared_workloads
 enum PreparedWorkloadPhase {
   PREPARED_WORKLOAD_PHASE_UNSPECIFIED = 0;
   PREPARED_WORKLOAD_PHASE_RESERVED = 1;
@@ -474,6 +482,12 @@ message PreparedWorkloadLifecycle {
   WorkloadResourceAnchors resources = 7;
 }
 
+// Persist every exact native owner before granting preparation authority.
+// Metadata binding advances only revision here; anchored lifecycle transitions
+// compare and advance both this and preparation.revision to exclude old writers.
+// The workload anchor's inbox thread is not the legacy registry instance alias
+// and does not become persistent volume identity.
+// @see runners::internal/server/resource_anchors
 message WorkloadResourceAnchors {
   uint64 revision = 1;
   agynio.api.runner.v1.ResourceAnchor workload = 2;
@@ -853,6 +867,14 @@ message VolumeAnchorMigrationEntry {
   string unresolved_reason = 8;
 }
 
+// Durable owner-wide admission block and immutable original inventory. Reserve,
+// apply and independent READY receipts are appended in order by revision CAS.
+// Apply stores the original PVC binding and adoption journal atomically; complete
+// requires every volume READY and pins prepared anchored admission permanently.
+// An unbound failed legacy generation stays quarantined without invented storage.
+// Resume the same plan after lost replies; there is no force-unblock operation.
+// @see runners::internal/server/volume_anchor_migration
+// @see orchestrator::internal/volumemigration/coordinator
 message VolumeAnchorMigration {
   string id = 1;
   RuntimeOwnerKind owner_kind = 2;
@@ -1039,6 +1061,13 @@ message BindVolumeResourceAnchor {
   uint64 expected_anchor_revision = 4;
 }
 
+// Every successful command advances the positive lifecycle revision; metering
+// alone does not. Begin retries retain the original intent, and confirmation
+// retains its first timestamp. Reopen preserves logical owner identity and cannot
+// bypass pending deletion; failed provisioning is not proof against late creates.
+// Anchored retirement retains binding/owner/provenance and native evidence instead
+// of reopening that history. Registry guards must also reject older SQL writers.
+// @see runners::internal/server/volume_lifecycle
 message UpdateVolumeCheckedRequest {
   string id = 1;
   uint64 expected_revision = 2;

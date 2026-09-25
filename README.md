@@ -2,6 +2,9 @@
 
 Agyn API contracts (IDL) repository.
 
+See [AGENTS.md](AGENTS.md) for source owners and contribution rules, and
+[docs/catalog.json](docs/catalog.json) for operational and historical documents.
+
 The checked-volume lifecycle on this branch is a coordinated contract proposal,
 not a released capability. See [CHECKED-VOLUMES.md](CHECKED-VOLUMES.md).
 
@@ -27,16 +30,9 @@ We use **Buf** for linting and codegen orchestration, and publish this module to
 
 ## Workload Removal Confirmation
 
-`Workload.removal_confirmed_at` separates lifecycle-confirmed absence from
-`removed_at`, which ends the metered lifetime and can be set by a terminal
-status report. A stop acknowledgement, failed status or historical billing
-timestamp does not populate the new field. Existing records remain unverified.
-
-`UpdateWorkloadRequest.removal_confirmed_at` is an explicit internal lifecycle
-write for stopped/failed workloads. The Runners service retains the first
-confirmation; runner state reports cannot supply it. Consumers must fail closed
-when it is absent. This is runner-observed absence, not node-partition fencing
-or a guarantee against delayed workload creation.
+Field semantics live beside `Workload` and `UpdateWorkloadRequest` in
+[the registry protobuf](proto/agynio/api/runners/v1/runners.proto).
+Billing end is not physical-removal evidence.
 
 Deploy the additive Runners migration and regenerate the Runners service,
 orchestrator and Gateway before clients rely on the JSON field. Existing
@@ -44,17 +40,9 @@ metering consumers keep using `removed_at`; never backfill confirmation from it.
 
 ## Runner compute resources
 
-`runner.v1.ContainerSpec.resources` adds typed CPU/memory requests and limits.
-The required `compute-resources` capability is the compatibility guard: clients
-must request it, and runners must reject unsupported capabilities rather than
-silently ignoring unknown resource fields. All four fields must be valid positive
-quantities, requests must not exceed limits, and runners reject values they
-cannot enforce.
-
-Opted-in workloads require explicit main bounds. Supporting containers may omit
-the entire message only when the runner provides complete operator-configured
-bounds, including for containers the runner injects. Explicit empty/partial
-messages are invalid. These are per-container allocations, not one task budget.
+The typed quantity, capability and per-container allocation contract lives beside
+`ComputeResources` and `ContainerSpec.resources` in
+[the native protobuf](proto/agynio/api/runner/v1/runner.proto).
 
 Publish this additive contract before deploying its runner and orchestrator
 consumers. Enable profiles only after a configured runner advertises the

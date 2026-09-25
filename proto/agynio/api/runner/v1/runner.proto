@@ -6,6 +6,10 @@ import "google/protobuf/timestamp.proto";
 
 // RunnerService mirrors the current docker-runner HTTP+WS+SSE surface,
 // but replaces unary exec/run with a single streaming-only Exec RPC.
+// Distinct lifecycle RPCs are capability boundaries: Unimplemented must retain
+// admission, never trigger a legacy/name-only fallback.
+// @see k8s-runner::internal/server/prepared_workload
+// @see orchestrator::internal/reconciler/prepared_start
 service RunnerService {
   // Health/readiness
   rpc Ready(ReadyRequest) returns (ReadyResponse);
@@ -301,6 +305,11 @@ message ReserveResourceAnchorResponse {
 // Immutable native migration journal, distinct from an allocation reservation.
 // A missing journal/owner/PVC or mismatched UID is unresolved, never permission
 // to recreate storage or adopt a replacement. Persist the entire receipt.
+// Reserve metadata, persist this receipt, apply to the original PVC, persist its
+// anchored binding, then finalize and independently observe READY before owner
+// admission opens. None of these operations executes work or allocates storage.
+// @see k8s-runner::internal/server/volume_anchor_adoption
+// @see orchestrator::internal/volumemigration/coordinator
 message VolumeAnchorAdoption {
   string id = 1;
   VolumeListItem previous = 2;
@@ -463,6 +472,9 @@ message PrepareWorkloadResponse {
   WorkloadBinding binding = 2;
 }
 
+// The complete binding must already be durable. Activation protects every named
+// volume before enabling the exact native incarnation; repeating that same
+// activation is not preparation or permission to replay an agent message.
 message ActivateWorkloadRequest {
   WorkloadBinding expected = 1;
 }
@@ -513,6 +525,9 @@ enum PreparedWorkloadRemovalState {
   PREPARED_WORKLOAD_REMOVAL_STATE_ABSENT = 2;
 }
 
+// PENDING never confirms removal. ABSENT attests native workload absence in the
+// stated backend, not Secret/PVC deletion or node/storage fencing. Workspaces and
+// their persistent anchors survive compute release.
 message RemovePreparedWorkloadResponse {
   PreparedWorkloadRemovalState state = 1;
   WorkloadBinding binding = 2;

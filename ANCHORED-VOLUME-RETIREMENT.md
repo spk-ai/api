@@ -4,16 +4,11 @@ This dependent proposal extends `feat/resource-anchor-registry`; it is not a
 published BSR capability or a stock Agyn release. Regenerate all participants
 from this API branch before using the new operations.
 
-`RunnerService.RemoveVolumeAnchored` is a distinct capability. Its request
-contains the complete persisted bound PVC identity, including the immutable
-volume owner and backend. An old runner must return `Unimplemented`; clients
-must not fall back to `RemoveVolume` or `RemoveVolumeBound`.
-
-`UpdateVolumeChecked.begin_anchored_removal` persists retirement intent while
-excluding workload admission for the owner. `confirm_anchored_removal` matches
-that intent with the native ABSENT response. `Volume` retains the original
-binding, owner, reservation receipt and native observation after deletion.
-Neither old checked operations nor reopening may replace this history.
+The distinct native capability and PVC/owner absence contract live beside
+`RemoveVolumeAnchored` in [runner.proto](proto/agynio/api/runner/v1/runner.proto).
+Registry intent, retained evidence and no-reopen semantics live beside `Volume`,
+`VolumeRemovalIntent` and `UpdateVolumeCheckedRequest` in
+[runners.proto](proto/agynio/api/runners/v1/runners.proto).
 
 This is explicit workspace retirement, not idle compute release. An ordinary
 turn retains its workspace and volume owner. Unbound first provision requires

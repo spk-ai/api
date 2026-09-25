@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "id": "readme",
+      "path": "README.md",
+      "title": "API",
+      "purpose": "Repository entry point, development setup and integration context.",
+      "kind": "navigation"
+    },
+    {
+      "id": "agents",
+      "path": "AGENTS.md",
+      "title": "API Contribution Guide",
+      "purpose": "Source ownership, living documentation and verification rules.",
+      "kind": "contribution"
+    },
+    {
+      "id": "checked-volumes",
+      "path": "CHECKED-VOLUMES.md",
+      "title": "Checked Volume Lifecycle Proposal",
+      "purpose": "Cross-service rollout and safety boundaries for checked volumes.",
+      "kind": "architecture"
+    },
+    {
+      "id": "prepared-workloads",
+      "path": "PREPARED-WORKLOADS.md",
+      "title": "Prepared Workload Contract",
+      "purpose": "Prepared execution dependencies and native security boundaries.",
+      "kind": "architecture"
+    },
+    {
+      "id": "preparation-revocation",
+      "path": "PREPARATION-REVOCATION.md",
+      "title": "Preparation Revocation",
+      "purpose": "Revocation coordination, limits and original validation evidence.",
+      "kind": "architecture"
+    },
+    {
+      "id": "anchored-retirement",
+      "path": "ANCHORED-VOLUME-RETIREMENT.md",
+      "title": "Anchored Volume Retirement",
+      "purpose": "Workspace retirement rollout dependencies and absence limits.",
+      "kind": "architecture"
+    },
+    {
+      "id": "volume-adoption",
+      "path": "VOLUME-ANCHOR-ADOPTION.md",
+      "title": "Existing Volume Anchor Adoption",
+      "purpose": "Adoption coordination, retention and original validation scope.",
+      "kind": "architecture"
+    }
+  ]
+}
