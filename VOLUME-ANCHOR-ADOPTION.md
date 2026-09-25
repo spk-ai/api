@@ -2,16 +2,13 @@
 
 Dependent, additive RunnerService proposal for migrating a previously bound
 workspace to a persistent resource anchor. It requires coordinated registry and
-controller changes; these four native methods alone are not a rollout protocol.
+controller changes; the native API alone is not a rollout protocol.
 Existing repository licensing is unchanged.
 
 ## Contract Owners
 
-The native sequence, original-PVC identity and distinct migration receipt live
-beside `VolumeAnchorAdoption` and its four RPCs in
-[runner.proto](proto/agynio/api/runner/v1/runner.proto). Owner-wide admission and
-append-only progress live beside `VolumeAnchorMigration` in
-[runners.proto](proto/agynio/api/runners/v1/runners.proto).
+See the [native adoption](proto/agynio/api/runner/v1/runner.proto) and
+[registry migration](proto/agynio/api/runners/v1/runners.proto) contracts.
 
 Drain all old writers, including accepted operations, before migration. Storage
 adoption is not first allocation or permission to retry an interrupted turn.
@@ -29,6 +26,8 @@ Native receipts require retention/backup policy. Do not deploy this contract by
 publishing an API alone or by falling back to older RPCs on `Unimplemented`.
 
 ## Verification
+
+Historical proposal verification, not a new run on this checkout:
 
 `buf lint` and `buf breaking . --against '.git#ref=23d3073'` validate this additive
 extension against the preceding preparation-revocation contract. Native fake-API
