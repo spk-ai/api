@@ -1051,6 +1051,12 @@ message VolumeAnchorReservation {
   string workload_id = 1;
   uint64 preparation_revision = 2;
   uint64 resource_revision = 3;
+  // Volume lifecycle revision immediately after its first anchor binding.
+  // Zero denotes historical revision 2. A checked failure/reopen before any
+  // native allocation can advance this value; it never permits replacing a
+  // known workspace. Registry and orchestrator must both support this receipt
+  // before retrying such a reopened volume (no legacy fallback).
+  uint64 allocation_revision = 4;
 }
 
 message BindVolumeResourceAnchor {
@@ -1084,9 +1090,15 @@ message UpdateVolumeCheckedRequest {
     FailVolumeProvisioning fail_provisioning = 6;
     ReopenVolume reopen = 7;
     // Metadata-only binding; unsupported servers must reject this operation.
+    // First generation only (expected_revision = 1).
     BindVolumeResourceAnchor bind_anchor = 8;
     BeginAnchoredVolumeRemoval begin_anchored_removal = 9;
     ConfirmAnchoredVolumeRemoval confirm_anchored_removal = 10;
+    // Explicit capability boundary for an unused volume reopened before its
+    // first native allocation. Older servers reject the unknown operation;
+    // callers must not fall back to bind_anchor. Requires expected_revision > 1
+    // and an exact nonzero allocation_revision receipt in the response.
+    BindVolumeResourceAnchor bind_reopened_anchor = 11;
   }
 }
 
