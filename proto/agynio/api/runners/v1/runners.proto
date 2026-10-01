@@ -1090,9 +1090,15 @@ message UpdateVolumeCheckedRequest {
     FailVolumeProvisioning fail_provisioning = 6;
     ReopenVolume reopen = 7;
     // Metadata-only binding; unsupported servers must reject this operation.
+    // First generation only (expected_revision = 1).
     BindVolumeResourceAnchor bind_anchor = 8;
     BeginAnchoredVolumeRemoval begin_anchored_removal = 9;
     ConfirmAnchoredVolumeRemoval confirm_anchored_removal = 10;
+    // Explicit capability boundary for an unused volume reopened before its
+    // first native allocation. Older servers reject the unknown operation;
+    // callers must not fall back to bind_anchor. Requires expected_revision > 1
+    // and an exact nonzero allocation_revision receipt in the response.
+    BindVolumeResourceAnchor bind_reopened_anchor = 11;
   }
 }
 
