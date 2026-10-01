@@ -1051,6 +1051,12 @@ message VolumeAnchorReservation {
   string workload_id = 1;
   uint64 preparation_revision = 2;
   uint64 resource_revision = 3;
+  // Volume lifecycle revision immediately after its first anchor binding.
+  // Zero denotes historical revision 2. A checked failure/reopen before any
+  // native allocation can advance this value; it never permits replacing a
+  // known workspace. Registry and orchestrator must both support this receipt
+  // before retrying such a reopened volume (no legacy fallback).
+  uint64 allocation_revision = 4;
 }
 
 message BindVolumeResourceAnchor {
