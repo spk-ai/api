@@ -396,6 +396,9 @@ message Container {
   optional google.protobuf.Timestamp finished_at = 11;
   // Redacted, bounded tail of this container's output, captured before a
   // failed workload's Pod is removed; a bracketed note when none could be read.
+  // Text, not raw output: writers convert TailWorkloadLogsResponse.data to
+  // valid UTF-8 after truncation and redaction, since a byte-bounded read can
+  // split a character and output need not be text at all.
   // Written with UpdateWorkload. List responses omit it, so read it with
   // GetWorkload. A server that predates this field drops it: writers must
   // confirm it in the response rather than assume it was stored.
