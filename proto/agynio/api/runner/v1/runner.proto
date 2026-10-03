@@ -90,6 +90,15 @@ service RunnerService {
   // - OK when logs are exhausted or the container terminates with the Pod still present
   // - Unavailable when the Pod is deleted mid-stream
   rpc StreamWorkloadLogs(StreamWorkloadLogsRequest) returns (stream StreamWorkloadLogsResponse);
+  // TailWorkloadLogs returns a bounded, non-following snapshot of a container's
+  // most recent output, e.g. failure evidence read before a Pod is removed. It
+  // is distinct from StreamWorkloadLogs so an older runner answers
+  // Unimplemented instead of ignoring max_bytes; callers must not fall back to
+  // an unbounded stream. NotFound for an unknown workload or container;
+  // FailedPrecondition when the backend has no output for the container (for
+  // example it never started).
+  // @see k8s-runner::internal/server/streaming
+  rpc TailWorkloadLogs(TailWorkloadLogsRequest) returns (TailWorkloadLogsResponse);
   rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
 
   // Exec (streaming-only; replaces /v1/exec/run and /v1/exec/interactive/ws)
@@ -819,6 +828,31 @@ message LogChunk {
 
 // Deprecated: end-of-stream is indicated by gRPC EOF.
 message LogEnd {}
+
+message TailWorkloadLogsRequest {
+  string workload_id = 1;
+  // Stable container name within the workload. Required.
+  string container_name = 2;
+  // Newest bytes to return. Required (> 0); the runner may lower it to its own
+  // ceiling and reports the bound it applied.
+  uint32 max_bytes = 3;
+  // Optional line bound applied by the backend before max_bytes (0 = runner
+  // default).
+  uint32 tail_lines = 4;
+  // Read the previous terminated instance of a restarted container.
+  bool previous = 5;
+}
+
+message TailWorkloadLogsResponse {
+  // Raw output, at most max_bytes, newest last. Not redacted: a caller that
+  // persists it must redact it first.
+  bytes data = 1;
+  // Set when older bytes were dropped to honour max_bytes. Lines dropped by
+  // tail_lines are not reported.
+  bool truncated = 2;
+  // The byte bound the runner applied.
+  uint32 max_bytes = 3;
+}
 
 // -------------------- Runtime events streaming --------------------
 
