@@ -394,6 +394,14 @@ message Container {
   int32 restart_count = 9;
   optional google.protobuf.Timestamp started_at = 10;
   optional google.protobuf.Timestamp finished_at = 11;
+  // Redacted, bounded tail of this container's output, captured before a
+  // failed workload's Pod is removed; a bracketed note when none could be read.
+  // Written with UpdateWorkload. List responses omit it, so read it with
+  // GetWorkload. A server that predates this field drops it: writers must
+  // confirm it in the response rather than assume it was stored.
+  // @see runners::internal/server/workloads
+  // @see orchestrator::internal/reconciler/failure_evidence
+  optional string output_tail = 12;
 }
 
 message Workload {
